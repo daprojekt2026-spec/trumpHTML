@@ -1,0 +1,495 @@
+
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trump Post Scoring — Metodika</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    padding: 32px 16px;
+  }
+
+  .widget {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  .widget-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .widget-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: .04em;
+  }
+  .badge-python { background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb44; }
+  .badge-notebook { background: #1a3326; color: #4ade80; border: 1px solid #16a34a44; }
+
+  /* ── TAB BAR ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 0;
+  }
+
+  .tab {
+    padding: 9px 18px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    user-select: none;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    outline: none;
+  }
+  .tab:hover { color: #94a3b8; }
+  .tab.active { color: #e2e8f0; border-bottom-color: #3b82f6; }
+
+  /* ── CODE BLOCK ── */
+  .code-wrap {
+    background: #0d1117;
+    border: 1px solid #1e293b;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    position: relative;
+  }
+
+  .code-scroll {
+    overflow-y: auto;
+    height: calc(14 * 1.6em + 24px); /* 14 řádků */
+    padding: 14px 0 14px 0;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+  .code-scroll::-webkit-scrollbar { width: 6px; }
+  .code-scroll::-webkit-scrollbar-track { background: transparent; }
+  .code-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+  pre {
+    font-family: "Fira Code", "Cascadia Code", "JetBrains Mono", "Courier New", monospace;
+    font-size: 12.5px;
+    line-height: 1.6em;
+    padding: 0 20px;
+    white-space: pre;
+    margin: 0;
+    display: none;
+  }
+  pre.active { display: block; }
+
+  /* ── LINE NUMBERS ── */
+  .code-table { border-collapse: collapse; width: 100%; }
+  .ln {
+    text-align: right;
+    padding: 0 14px 0 8px;
+    color: #374151;
+    user-select: none;
+    min-width: 36px;
+    font-size: 11.5px;
+    vertical-align: top;
+    line-height: 1.6em;
+  }
+  .lc {
+    padding: 0 16px 0 0;
+    line-height: 1.6em;
+    white-space: pre;
+    vertical-align: top;
+  }
+
+  /* ── SYNTAX COLORS ── */
+  .kw  { color: #c792ea; }   /* keywords: def, return, if, for… */
+  .fn  { color: #82aaff; }   /* function names */
+  .st  { color: #c3e88d; }   /* strings */
+  .rx  { color: #f78c6c; }   /* regex patterns */
+  .cm  { color: #546e7a; font-style: italic; } /* comments */
+  .nm  { color: #f78c6c; }   /* numbers */
+  .ct  { color: #ffcb6b; }   /* category constants */
+  .op  { color: #89ddff; }   /* operators / brackets */
+  .py  { color: #80cbc4; }   /* builtins */
+
+  /* ── COPY BUTTON ── */
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    z-index: 10;
+  }
+  .copy-btn:hover { background: #334155; color: #e2e8f0; }
+
+  /* ── FOOTER INFO ── */
+  .info-bar {
+    display: flex;
+    gap: 20px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .info-item {
+    font-size: 12px;
+    color: #64748b;
+  }
+  .info-item strong { color: #94a3b8; }
+
+  /* ── SCORE TABLE ── */
+  .score-table-wrap {
+    margin-top: 20px;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .score-table-title {
+    background: #0d1117;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1e293b;
+  }
+  table.dist {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    background: #0d1117;
+  }
+  table.dist th {
+    padding: 7px 14px;
+    text-align: left;
+    color: #475569;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1e293b;
+  }
+  table.dist td {
+    padding: 6px 14px;
+    border-bottom: 1px solid #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+  table.dist tr:last-child td { border-bottom: none; }
+  .label-rel { color: #4ade80; font-weight: 600; }
+  .label-may { color: #fbbf24; font-weight: 600; }
+  .label-irr { color: #64748b; }
+  .bar-cell { width: 120px; }
+  .bar-bg { background: #1e293b; border-radius: 3px; height: 6px; }
+  .bar-fill { height: 6px; border-radius: 3px; }
+  .fill-rel { background: #22c55e; }
+  .fill-may { background: #f59e0b; }
+  .fill-irr { background: #334155; }
+</style>
+</head>
+<body>
+<div class="widget">
+
+  <!-- HEADER -->
+  <div class="widget-header">
+    <span class="badge badge-notebook">Jupyter Notebook</span>
+    <span class="widget-title">Trump Post Scoring — Metodika kategorizace</span>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab(this,'rules')">RULES &amp; STOP_RULES</button>
+    <button class="tab" onclick="switchTab(this,'score')">score_post()</button>
+  </div>
+
+  <!-- CODE BLOCK -->
+  <div class="code-wrap">
+    <button class="copy-btn" onclick="copyCode()">Kopírovat</button>
+    <div class="code-scroll">
+
+      <!-- TAB 1: RULES -->
+      <table class="code-table active" id="tab-rules">
+<tr><td class="ln">1</td><td class="lc"><span class="cm"># Každé pravidlo: (regex_vzor, váha, kategorie)</span></td></tr>
+<tr><td class="ln">2</td><td class="lc"><span class="ct">RULES</span> <span class="op">=</span> <span class="op">[</span></td></tr>
+<tr><td class="ln">3</td><td class="lc"></td></tr>
+<tr><td class="ln">4</td><td class="lc">    <span class="cm"># ── CRYPTO ─────────────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">5</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(bitcoin|btc)\b"</span>,                                         <span class="nm">5</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">6</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(ethereum|eth)\b"</span>,                                        <span class="nm">4</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">7</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(cryptocurrenc(?:y|ies)|crypto assets?)\b"</span>,               <span class="nm">4</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">8</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(crypto(?:currency)?|digital.?(?:asset|currency|dollar))\b"</span>,<span class="nm">4</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">9</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(xrp|ripple|solana|dogecoin|doge|cardano|litecoin)\b"</span>,    <span class="nm">3</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">10</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(stablecoins?|cbdc|defi|blockchain|web3)\b"</span>,             <span class="nm">3</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">11</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(strategic.?(?:bitcoin|crypto).?reserve)\b"</span>,             <span class="nm">5</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">12</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(crypto.?(?:ban|bill|law|regulat(?:ion|e|ed|ory)|legal|tax))\b"</span>,<span class="nm">4</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">13</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(bitcoin.?(?:reserve|etf|fund|mining))\b"</span>,               <span class="nm">4</span>, <span class="st">"CRYPTO"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">14</td><td class="lc"></td></tr>
+<tr><td class="ln">15</td><td class="lc">    <span class="cm"># ── TRADE / TARIFFS ──────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">16</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(tariff(?:s)?|tariff money)\b"</span>,                          <span class="nm">5</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">17</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(trade.?(?:war|deal|deficit|surplus|balance|agreement))\b"</span>, <span class="nm">5</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">18</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(import.?(?:tax|duty|ban|restriction))\b"</span>,               <span class="nm">4</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">19</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(export.?(?:ban|control|restriction|tax))\b"</span>,            <span class="nm">4</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">20</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(free.?trade|trade.?agreement|usmca|nafta|rcep)\b"</span>,       <span class="nm">4</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">21</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(customs|duty|duties)\b"</span>,                               <span class="nm">3</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">22</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(wto|world.?trade.?org)\b"</span>,                              <span class="nm">3</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">23</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(protectionism|protectionist)\b"</span>,                        <span class="nm">3</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">24</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(supply.?chain|reshoring|onshoring|nearshoring)\b"</span>,       <span class="nm">2</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">25</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(made.?in.?(?:america|usa|china))\b"</span>,                    <span class="nm">2</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">26</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(decoupling|de-risking)\b"</span>,                              <span class="nm">3</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">27</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(china deal|mexico deal|canada deal)\b"</span>,                 <span class="nm">4</span>, <span class="st">"TRADE"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">28</td><td class="lc"></td></tr>
+<tr><td class="ln">29</td><td class="lc">    <span class="cm"># ── MONETARY POLICY ──────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">30</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(federal.?reserve|the fed|fed should|fed must|fed rate)\b"</span>, <span class="nm">5</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">31</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(fomc|jerome.?powell|powell)\b"</span>,                         <span class="nm">4</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">32</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(interest.?rates?|rate.?(?:cut|hike|pause|hold)|low rates?)\b"</span>,<span class="nm">5</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">33</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(inflation|cpi|pce|deflation|stagflation|hyperinflation)\b"</span>,<span class="nm">5</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">34</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(money.?supply|m2|quantitative.?(?:easing|tightening)|qe|qt)\b"</span>,<span class="nm">4</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">35</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(dollar|usd|dxy|reserve.?currency|petrodollar)\b"</span>,        <span class="nm">4</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">36</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(currency devaluation|strong dollar|weak dollar)\b"</span>,      <span class="nm">4</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">37</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(national.?debt|debt.?ceiling|treasury|t-bill|t-bond)\b"</span>, <span class="nm">4</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">38</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(yield(?:s)?|yield.?curve|inversion|spread)\b"</span>,          <span class="nm">3</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">39</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(liquidity|credit.?crunch|bank.?run|bank.?crisis|svb)\b"</span>, <span class="nm">4</span>, <span class="st">"MONETARY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">40</td><td class="lc"></td></tr>
+<tr><td class="ln">41</td><td class="lc">    <span class="cm"># ── GEOPOLITICS ──────────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">42</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(china|prc|beijing|xi.?jinping|ccp)\b"</span>,                  <span class="nm">3</span>, <span class="st">"GEOPOLITICS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">43</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(russia|putin|moscow|kremlin)\b"</span>,                        <span class="nm">3</span>, <span class="st">"GEOPOLITICS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">44</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(taiwan|strait|tsmc|semiconductor.?(?:war|ban|china))\b"</span>, <span class="nm">4</span>, <span class="st">"GEOPOLITICS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">45</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(sanction(?:s)?|embargo(?:es)?|blacklist)\b"</span>,            <span class="nm">4</span>, <span class="st">"GEOPOLITICS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">46</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(war(?!rant|ranty|ehouse|m)|conflict|invasion)\b"</span>,        <span class="nm">3</span>, <span class="st">"GEOPOLITICS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">47</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(nato|alliance|g7|g20|brics|un.?security)\b"</span>,            <span class="nm">2</span>, <span class="st">"GEOPOLITICS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">48</td><td class="lc"></td></tr>
+<tr><td class="ln">49</td><td class="lc">    <span class="cm"># ── ENERGY ───────────────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">50</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(oil prices?|crude oil|crude|brent|wti)\b"</span>,              <span class="nm">4</span>, <span class="st">"ENERGY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">51</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(natural.?gas|lng|pipeline)\b"</span>,                          <span class="nm">3</span>, <span class="st">"ENERGY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">52</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(opec|opec\+|saudi.?arabia|aramco)\b"</span>,                   <span class="nm">4</span>, <span class="st">"ENERGY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">53</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(gasoline prices?|gas prices?|fuel|diesel|refin)\b"</span>,      <span class="nm">3</span>, <span class="st">"ENERGY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">54</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(american energy|energy independence)\b"</span>,                <span class="nm">4</span>, <span class="st">"ENERGY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">55</td><td class="lc"></td></tr>
+<tr><td class="ln">56</td><td class="lc">    <span class="cm"># ── FISCAL POLICY ────────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">57</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(tax.?(?:cut|reform|hike|increase|break|credit|rate))\b"</span>,  <span class="nm">4</span>, <span class="st">"FISCAL"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">58</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(raise taxes|lower taxes)\b"</span>,                            <span class="nm">4</span>, <span class="st">"FISCAL"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">59</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(budget(?:.?deficit)?|fiscal.?(?:policy|stimulus|cliff))\b"</span>,<span class="nm">4</span>, <span class="st">"FISCAL"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">60</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(stimulus|bailout|rescue.?package|spending.?bill)\b"</span>,     <span class="nm">4</span>, <span class="st">"FISCAL"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">61</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(deregulation|regulation.?(?:cut|rollback|reform))\b"</span>,    <span class="nm">3</span>, <span class="st">"FISCAL"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">62</td><td class="lc"></td></tr>
+<tr><td class="ln">63</td><td class="lc">    <span class="cm"># ── MARKET SENTIMENT ─────────────────────────────────────────────</span></td></tr>
+<tr><td class="ln">64</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(s&amp;p.?500|sp500|nasdaq|dow.?jones|russell.?2000)\b"</span>,       <span class="nm">4</span>, <span class="st">"SENTIMENT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">65</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(stock(?:s)?(?:.?market)?|equit(?:y|ies)|shares?)\b"</span>,     <span class="nm">3</span>, <span class="st">"SENTIMENT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">66</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(rally|crash(?:ing)?|correction|selloff|meltdown)\b"</span>,     <span class="nm">3</span>, <span class="st">"SENTIMENT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">67</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(401k'?s?|record stock market|markets? crashing)\b"</span>,      <span class="nm">4</span>, <span class="st">"SENTIMENT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">68</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(volatility|vix|fear.?greed|panic|euphoria)\b"</span>,           <span class="nm">2</span>, <span class="st">"SENTIMENT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">69</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(gold|silver|commodity|safe.?haven)\b"</span>,                  <span class="nm">2</span>, <span class="st">"SENTIMENT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">70</td><td class="lc"><span class="op">]</span></td></tr>
+<tr><td class="ln">71</td><td class="lc"></td></tr>
+<tr><td class="ln">72</td><td class="lc"><span class="cm"># ── STOP VZORY (post se přeskočí, pokud není override) ──────────────</span></td></tr>
+<tr><td class="ln">73</td><td class="lc"><span class="ct">STOP_RULES</span> <span class="op">=</span> <span class="op">[</span></td></tr>
+<tr><td class="ln">74</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(golf|pga|nfl|nba|mlb|nhl|soccer|football|baseball)\b"</span>,   <span class="st">"LEISURE_SPORT"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">75</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(happy.?birthday|merry.?christmas|happy.?new.?year)\b"</span>,   <span class="st">"WISHES_HOLIDAYS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">76</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(parade|ceremony|wedding|dinner|gala|reception)\b"</span>,       <span class="st">"SOCIAL_EVENTS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">77</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(complete and total endorsement|vote for @)\b"</span>,           <span class="st">"ENDORSEMENTS"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">78</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(prayers?.?for|pray.?for.{0,20}(victim|family|loss))\b"</span>,  <span class="st">"SYMPATHY_TRAGEDY"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">79</td><td class="lc">    <span class="op">(</span><span class="rx">r"\b(movie|film|documentary|book.?review|concert)\b"</span>,        <span class="st">"CULTURE_MEDIA"</span><span class="op">)</span>,</td></tr>
+<tr><td class="ln">80</td><td class="lc"><span class="op">]</span></td></tr>
+<tr><td class="ln">81</td><td class="lc"></td></tr>
+<tr><td class="ln">82</td><td class="lc"><span class="cm"># Silný ekonomický signál přebije STOP pravidlo</span></td></tr>
+<tr><td class="ln">83</td><td class="lc"><span class="ct">STOP_OVERRIDE</span> <span class="op">=</span> <span class="op">(</span></td></tr>
+<tr><td class="ln">84</td><td class="lc">    <span class="rx">r"\b(bitcoin|btc|crypto|tariff|tariffs|trade deal|inflation|"</span></td></tr>
+<tr><td class="ln">85</td><td class="lc">    <span class="rx">r"federal reserve|interest rates?|stock market|401k|nasdaq|"</span></td></tr>
+<tr><td class="ln">86</td><td class="lc">    <span class="rx">r"s&amp;p|oil prices?|gas prices?|tax cuts?|raise taxes|"</span></td></tr>
+<tr><td class="ln">87</td><td class="lc">    <span class="rx">r"jobs report|drug prices?|sanctions?|embargo)\b"</span></td></tr>
+<tr><td class="ln">88</td><td class="lc"><span class="op">)</span></td></tr>
+      </table>
+
+      <!-- TAB 2: score_post -->
+      <table class="code-table" id="tab-score">
+<tr><td class="ln">1</td><td class="lc"><span class="kw">def</span> <span class="fn">score_post</span><span class="op">(</span>text<span class="op">:</span> <span class="py">str</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="py">dict</span><span class="op">:</span></td></tr>
+<tr><td class="ln">2</td><td class="lc">    <span class="cm">"""Vrátí klasifikaci a skóre 0–10 pro jeden text."""</span></td></tr>
+<tr><td class="ln">3</td><td class="lc">    t <span class="op">=</span> <span class="py">str</span><span class="op">(</span>text<span class="op">).</span><span class="fn">lower</span><span class="op">()</span></td></tr>
+<tr><td class="ln">4</td><td class="lc"></td></tr>
+<tr><td class="ln">5</td><td class="lc">    <span class="cm"># 1) STOP kontrola</span></td></tr>
+<tr><td class="ln">6</td><td class="lc">    stop_category <span class="op">=</span> <span class="kw">None</span></td></tr>
+<tr><td class="ln">7</td><td class="lc">    <span class="kw">for</span> pattern, category <span class="kw">in</span> <span class="ct">STOP_RULES</span><span class="op">:</span></td></tr>
+<tr><td class="ln">8</td><td class="lc">        match <span class="op">=</span> re<span class="op">.</span><span class="fn">search</span><span class="op">(</span>pattern, t<span class="op">)</span></td></tr>
+<tr><td class="ln">9</td><td class="lc">        <span class="kw">if</span> match<span class="op">:</span></td></tr>
+<tr><td class="ln">10</td><td class="lc">            stop_category <span class="op">=</span> category</td></tr>
+<tr><td class="ln">11</td><td class="lc">            <span class="kw">break</span></td></tr>
+<tr><td class="ln">12</td><td class="lc"></td></tr>
+<tr><td class="ln">13</td><td class="lc">    override <span class="op">=</span> <span class="py">bool</span><span class="op">(</span>re<span class="op">.</span><span class="fn">search</span><span class="op">(</span><span class="ct">STOP_OVERRIDE</span>, t<span class="op">))</span></td></tr>
+<tr><td class="ln">14</td><td class="lc"></td></tr>
+<tr><td class="ln">15</td><td class="lc">    <span class="kw">if</span> stop_category <span class="kw">and not</span> override<span class="op">:</span></td></tr>
+<tr><td class="ln">16</td><td class="lc">        <span class="kw">return</span> <span class="op">{</span></td></tr>
+<tr><td class="ln">17</td><td class="lc">            <span class="st">"type"</span><span class="op">:</span>       <span class="st">"STOP"</span>,</td></tr>
+<tr><td class="ln">18</td><td class="lc">            <span class="st">"category"</span><span class="op">:</span>   stop_category,</td></tr>
+<tr><td class="ln">19</td><td class="lc">            <span class="st">"score"</span><span class="op">:</span>      <span class="nm">0</span>,</td></tr>
+<tr><td class="ln">20</td><td class="lc">            <span class="st">"label"</span><span class="op">:</span>      <span class="st">"irrelevant"</span>,</td></tr>
+<tr><td class="ln">21</td><td class="lc">            <span class="st">"categories"</span><span class="op">:</span> stop_category,</td></tr>
+<tr><td class="ln">22</td><td class="lc">            <span class="st">"signals"</span><span class="op">:</span>    <span class="py">f</span><span class="st">"STOP:{stop_category}:{match.group()}"</span>,</td></tr>
+<tr><td class="ln">23</td><td class="lc">            <span class="st">"all_scores"</span><span class="op">:</span> <span class="op">{}</span></td></tr>
+<tr><td class="ln">24</td><td class="lc">        <span class="op">}</span></td></tr>
+<tr><td class="ln">25</td><td class="lc"></td></tr>
+<tr><td class="ln">26</td><td class="lc">    <span class="cm"># 2) Hlavní pravidla</span></td></tr>
+<tr><td class="ln">27</td><td class="lc">    category_scores <span class="op">=</span> <span class="op">{}</span></td></tr>
+<tr><td class="ln">28</td><td class="lc">    signals <span class="op">=</span> <span class="op">[]</span></td></tr>
+<tr><td class="ln">29</td><td class="lc"></td></tr>
+<tr><td class="ln">30</td><td class="lc">    <span class="kw">for</span> pattern, weight, category <span class="kw">in</span> <span class="ct">RULES</span><span class="op">:</span></td></tr>
+<tr><td class="ln">31</td><td class="lc">        match <span class="op">=</span> re<span class="op">.</span><span class="fn">search</span><span class="op">(</span>pattern, t<span class="op">)</span></td></tr>
+<tr><td class="ln">32</td><td class="lc">        <span class="kw">if</span> match<span class="op">:</span></td></tr>
+<tr><td class="ln">33</td><td class="lc">            category_scores<span class="op">[</span>category<span class="op">]</span> <span class="op">=</span> category_scores<span class="op">.</span><span class="fn">get</span><span class="op">(</span>category, <span class="nm">0</span><span class="op">)</span> <span class="op">+</span> weight</td></tr>
+<tr><td class="ln">34</td><td class="lc">            signals<span class="op">.</span><span class="fn">append</span><span class="op">(</span><span class="py">f</span><span class="st">"{category}+{weight}:{match.group()}"</span><span class="op">)</span></td></tr>
+<tr><td class="ln">35</td><td class="lc"></td></tr>
+<tr><td class="ln">36</td><td class="lc">    <span class="cm"># 3) Výpočet celkového skóre (max 10)</span></td></tr>
+<tr><td class="ln">37</td><td class="lc">    total_score <span class="op">=</span> <span class="py">min</span><span class="op">(</span><span class="py">sum</span><span class="op">(</span>category_scores<span class="op">.</span><span class="fn">values</span><span class="op">()),</span> <span class="nm">10</span><span class="op">)</span></td></tr>
+<tr><td class="ln">38</td><td class="lc"></td></tr>
+<tr><td class="ln">39</td><td class="lc">    <span class="cm"># 4) Seřazení kategorií podle skóre</span></td></tr>
+<tr><td class="ln">40</td><td class="lc">    sorted_cats <span class="op">=</span> <span class="py">sorted</span><span class="op">(</span>category_scores, <span class="kw">key</span><span class="op">=</span><span class="kw">lambda</span> c<span class="op">:</span> category_scores<span class="op">[</span>c<span class="op">],</span> <span class="kw">reverse</span><span class="op">=</span><span class="kw">True</span><span class="op">)</span></td></tr>
+<tr><td class="ln">41</td><td class="lc"></td></tr>
+<tr><td class="ln">42</td><td class="lc">    <span class="kw">if</span>   total_score <span class="op">&gt;=</span> <span class="nm">6</span><span class="op">:</span>  label <span class="op">=</span> <span class="st">"relevant"</span></td></tr>
+<tr><td class="ln">43</td><td class="lc">    <span class="kw">elif</span> total_score <span class="op">&gt;=</span> <span class="nm">3</span><span class="op">:</span>  label <span class="op">=</span> <span class="st">"maybe"</span></td></tr>
+<tr><td class="ln">44</td><td class="lc">    <span class="kw">else</span><span class="op">:</span>                  label <span class="op">=</span> <span class="st">"irrelevant"</span></td></tr>
+<tr><td class="ln">45</td><td class="lc"></td></tr>
+<tr><td class="ln">46</td><td class="lc">    main_cat <span class="op">=</span> sorted_cats<span class="op">[</span><span class="nm">0</span><span class="op">]</span> <span class="kw">if</span> sorted_cats <span class="kw">else</span> <span class="st">"OTHER"</span></td></tr>
+<tr><td class="ln">47</td><td class="lc"></td></tr>
+<tr><td class="ln">48</td><td class="lc">    <span class="kw">return</span> <span class="op">{</span></td></tr>
+<tr><td class="ln">49</td><td class="lc">        <span class="st">"type"</span><span class="op">:</span>       <span class="st">"MAIN"</span> <span class="kw">if</span> sorted_cats <span class="kw">else</span> <span class="st">"OTHER"</span>,</td></tr>
+<tr><td class="ln">50</td><td class="lc">        <span class="st">"category"</span><span class="op">:</span>   main_cat,</td></tr>
+<tr><td class="ln">51</td><td class="lc">        <span class="st">"score"</span><span class="op">:</span>      total_score,</td></tr>
+<tr><td class="ln">52</td><td class="lc">        <span class="st">"label"</span><span class="op">:</span>      label,</td></tr>
+<tr><td class="ln">53</td><td class="lc">        <span class="st">"categories"</span><span class="op">:</span> <span class="st">", "</span><span class="op">.</span><span class="fn">join</span><span class="op">(</span>sorted_cats<span class="op">[:</span><span class="nm">3</span><span class="op">]),</span></td></tr>
+<tr><td class="ln">54</td><td class="lc">        <span class="st">"signals"</span><span class="op">:</span>    <span class="st">"; "</span><span class="op">.</span><span class="fn">join</span><span class="op">(</span>signals<span class="op">[:</span><span class="nm">6</span><span class="op">]),</span></td></tr>
+<tr><td class="ln">55</td><td class="lc">        <span class="st">"all_scores"</span><span class="op">:</span> category_scores</td></tr>
+<tr><td class="ln">56</td><td class="lc">    <span class="op">}</span></td></tr>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- INFO -->
+  <div class="info-bar">
+    <span class="info-item"><strong>Dataset:</strong> Truth Social 9 468 postů</span>
+    <span class="info-item"><strong>Kategorií:</strong> 10 (CRYPTO, TRADE, MONETARY, GEOPOLITICS…)</span>
+    <span class="info-item"><strong>Pravidel RULES:</strong> ~95 regex vzorů</span>
+    <span class="info-item"><strong>STOP kategorií:</strong> 6</span>
+  </div>
+
+  <!-- SCORE DISTRIBUTION TABLE -->
+  <div class="score-table-wrap">
+    <div class="score-table-title">Distribuce skóre — 12 367 postů</div>
+    <table class="dist">
+      <thead>
+        <tr>
+          <th>Skóre</th>
+          <th>Počet postů</th>
+          <th>Label</th>
+          <th class="bar-cell">Podíl</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>10</strong></td><td>246</td>
+          <td><span class="label-rel">relevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-rel" style="width:16%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>9</strong></td><td>91</td>
+          <td><span class="label-rel">relevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-rel" style="width:6%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>8</strong></td><td>121</td>
+          <td><span class="label-rel">relevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-rel" style="width:8%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>7</strong></td><td>89</td>
+          <td><span class="label-rel">relevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-rel" style="width:6%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>6</strong></td><td>71</td>
+          <td><span class="label-rel">relevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-rel" style="width:5%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>5</strong></td><td>397</td>
+          <td><span class="label-may">maybe</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-may" style="width:26%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>4</strong></td><td>175</td>
+          <td><span class="label-may">maybe</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-may" style="width:11%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>3</strong></td><td>483</td>
+          <td><span class="label-may">maybe</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-may" style="width:32%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>2</strong></td><td>364</td>
+          <td><span class="label-irr">irrelevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-irr" style="width:24%"></div></div></td>
+        </tr>
+        <tr>
+          <td><strong>0–1</strong></td><td>10 330</td>
+          <td><span class="label-irr">irrelevant</span></td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill fill-irr" style="width:100%"></div></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+function switchTab(btn, tabId) {
+  document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.code-table').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+  // scroll to top on tab switch
+  document.querySelector('.code-scroll').scrollTop = 0;
+}
+
+// make code-table rows visible inside the scroll container
+document.querySelectorAll('.code-table').forEach(tbl => {
+  // handled via display:none/block on the table element already
+});
+
+function copyCode() {
+  const activeTab = document.querySelector('.code-table.active');
+  const lines = activeTab.querySelectorAll('.lc');
+  const text = Array.from(lines).map(l => l.innerText).join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Zkopírováno!';
+    setTimeout(() => btn.textContent = orig, 1800);
+  });
+}
+</script>
+</body>
+</html>
